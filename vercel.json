@@ -22,18 +22,18 @@
     },
     {
       "src": "/assets/(.*)",
-      "dest": "/frontend/dist/assets/$1"
+      "dest": "/frontend/assets/$1"
     },
     {
       "src": "/favicon.ico",
-      "dest": "/frontend/dist/favicon.ico"
+      "dest": "/frontend/favicon.ico"
     },
     {
       "handle": "filesystem"
     },
     {
       "src": "/(.*)",
-      "dest": "/frontend/dist/index.html"
+      "dest": "/frontend/index.html"
     }
   ]
 }
