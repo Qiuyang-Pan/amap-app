@@ -167,90 +167,118 @@
       }
   };
   
-  const highlightCities = () => {
-    if (!districtSearch.value || !map.value || citiesToHighlight.value.length === 0) {
-        console.log('高亮条件不满足（地图未准备好或无城市数据）');
-        return;
-    }
-  
-    clearHighlights(); // 先清除旧的
-  
-    console.log(`开始高亮 ${citiesToHighlight.value.length} 个城市...`);
-  
-    const promises = citiesToHighlight.value.map(cityName => {
-      return new Promise((resolve, reject) => {
-          districtSearch.value.search(cityName, (status, result) => {
-              // console.log(`查询 '${cityName}' 结果:`, status, result); // 调试日志
-              if (status === 'complete' && result.info === 'OK' && result.districtList && result.districtList.length > 0) {
-                  const districtInfo = result.districtList[0];
-                  const bounds = districtInfo.boundaries;
-                  const center = districtInfo.center; // 获取中心点
-  
-                  if (bounds && bounds.length > 0) {
-                      bounds.forEach(bound => {
-                          if (bound && bound.length > 0) { // 检查边界数据有效性
-                              const polygon = new AMap.Polygon({
-                                  path: bound,
-                                  ...polygonStyle, // 应用统一样式
-                                  map: map.value,
-                                  // 可选：添加自定义属性以便识别
-                                  // extData: { type: 'cityHighlight', name: cityName }
-                              });
-                              drawnPolygons.value.push(polygon);
-                          } else {
-                             console.warn(`城市 '${cityName}' 的边界数据无效。`);
-                          }
-                      });
+  const highlightCities = async (batchSize = 3, delayBetweenBatches = 100) => { // 设置默认批大小和延时
+  // 1. 前置条件检查
+  if (!districtSearch.value || !map.value || !citiesToHighlight.value || citiesToHighlight.value.length === 0) {
+    console.warn('[HighlightCities] Aborted: Initial conditions not met (Map/Search not ready or no cities).');
+    return;
+  }
+  // 2. 清理并准备
+  clearHighlights(); // 确保清除旧的高亮
+  const cities = [...citiesToHighlight.value]; // 创建城市列表副本，避免在异步操作中意外修改
+  console.log(`[HighlightCities] Starting batch process for ${cities.length} cities. Batch size: ${batchSize}, Delay between batches: ${delayBetweenBatches}ms`);
+  const allResults = []; // 用于收集所有批次的结果
+  // 3. 分批处理循环
+  for (let i = 0; i < cities.length; i += batchSize) {
+    const batch = cities.slice(i, i + batchSize); // 获取当前批次的城市
+    console.log(`[HighlightCities] Processing batch #${Math.floor(i / batchSize) + 1} (${batch.length} cities):`, batch);
+    // 4. 创建当前批次的查询 Promises
+    const batchPromises = batch.map(cityName => {
+      // 将单个城市的查询封装在 Promise 中
+      return new Promise((resolve) => { // 注意：这里总是 resolve，以便 Promise.all 能处理完整个批次
+        console.log(`[${cityName}] Initiating districtSearch.search() in batch...`);
+        districtSearch.value.search(cityName, (status, result) => {
+          // console.log(`[${cityName}] Search callback received. Status: ${status}, Info: ${result?.info}`); // 更详细的调试日志
+          try { // 包裹绘制逻辑，防止绘制错误中断
+            if (status === 'complete' && result.info === 'OK' && result.districtList && result.districtList.length > 0) {
+              const districtInfo = result.districtList[0];
+              const bounds = districtInfo.boundaries;
+              const center = districtInfo.center; // 获取中心点
+              let polygonsAddedInCity = 0;
+              if (bounds && bounds.length > 0) {
+                bounds.forEach((bound, index) => {
+                  if (bound && bound.length > 0) { // 检查边界数据有效性
+                    const polygon = new AMap.Polygon({
+                      path: bound,
+                      ...polygonStyle,
+                      map: map.value,
+                    });
+                    drawnPolygons.value.push(polygon); // 直接添加到全局数组
+                    polygonsAddedInCity++;
+                    // console.log(`[${cityName}] Polygon #${index + 1} created and added.`);
                   } else {
-                       console.warn(`城市 '${cityName}' 未找到有效的边界数据。`);
+                    console.warn(`[${cityName}] Boundary set #${index + 1} is invalid.`);
                   }
-  
-                  if (center) {
-                      const textLabel = new AMap.Text({
-                          text: cityName,
-                          position: center,
-                          style: labelStyle, // 应用统一样式
-                          map: map.value,
-                          // 可选：添加自定义属性
-                          // extData: { type: 'cityLabel', name: cityName }
-                      });
-                      drawnLabels.value.push(textLabel);
-                  } else {
-                       console.warn(`城市 '${cityName}' 未找到有效的中心点坐标。`);
-                  }
-                  resolve(cityName); // 当前城市处理完成
-  
-              } else if (status === 'no_data') {
-                   console.warn(`高德地图查询行政区 '${cityName}' 无数据:`, result);
-                   resolve(cityName); // 查不到也算完成，避免阻塞其他城市
+                });
               } else {
-                  console.error(`高德地图查询行政区 '${cityName}' 失败:`, status, result);
-                  reject(new Error(`查询 ${cityName} 失败: ${status}, ${result.info}`)); // 查询失败
+                console.warn(`[${cityName}] No valid boundary data found.`);
               }
-          });
+              if (center && polygonsAddedInCity > 0) { // 仅在成功绘制多边形后添加标签（或根据需求调整）
+                 const textLabel = new AMap.Text({
+                    text: cityName,
+                    position: center,
+                    style: labelStyle,
+                    map: map.value,
+                 });
+                 drawnLabels.value.push(textLabel); // 直接添加到全局数组
+                 // console.log(`[${cityName}] Text label created and added.`);
+              } else if (!center) {
+                 console.warn(`[${cityName}] No valid center point found.`);
+              } else {
+                 // console.log(`[${cityName}] No polygons added, skipping label.`);
+              }
+              console.log(`[${cityName}] Processed successfully.`);
+              resolve({ status: 'fulfilled', value: cityName }); // 成功，返回 allSettled 兼容格式
+            } else if (status === 'no_data') {
+              console.warn(`[${cityName}] API returned 'no_data'. Result:`, result);
+              resolve({ status: 'fulfilled', value: cityName }); // 无数据也视为处理完成（但无绘制）
+            } else {
+              console.error(`[${cityName}] API search failed! Status: ${status}, Info: ${result?.info}`);
+              resolve({ status: 'rejected', reason: new Error(`查询 ${cityName} 失败: Status=${status}, Info=${result?.info}`) }); // 查询失败，返回失败信息
+            }
+          } catch (drawError) {
+             console.error(`[${cityName}] Error during drawing or processing result:`, drawError);
+             resolve({ status: 'rejected', reason: new Error(`处理或绘制 ${cityName} 时出错: ${drawError.message}`) }); // 绘制或处理时内部错误
+          }
+        });
       });
     });
-  
-    // 等待所有查询和绘制操作（或失败）
-    Promise.allSettled(promises).then(results => {
-        console.log('所有城市高亮处理完成。');
-        const successfulCities = results.filter(r => r.status === 'fulfilled').map(r => r.value);
-        const failedCities = results.filter(r => r.status === 'rejected').map(r => r.reason.message); // 获取失败原因中的城市名
-  
-        console.log('成功处理的城市:', successfulCities);
-        if (failedCities.length > 0) {
-            console.warn(`查询或绘制失败的城市 (${failedCities.length}个):`, failedCities);
-            // 可以选择性地给用户一个提示
-            // errorMessage.value = `部分城市 (${failedCities.join(', ')}) 加载失败。`;
-        }
-  
-        // 可选：在所有绘制完成后调整视野以适应所有高亮区域
-        if (drawnPolygons.value.length > 0) {
-          //   map.value.setFitView(drawnPolygons.value, false, [60, 60, 60, 60], 12); // 调整视野
-        }
-    });
+    // 5. 等待当前批次的所有查询完成
+    // 使用 Promise.all 因为我们内部已经将所有情况（包括错误）都 resolve 了
+    const batchResults = await Promise.all(batchPromises);
+    allResults.push(...batchResults); // 将当前批次的结果收集到总结果数组
+    // 6. 如果不是最后一批，并且设置了批间延时，则等待
+    if (i + batchSize < cities.length && delayBetweenBatches > 0) {
+      console.log(`[HighlightCities] Waiting ${delayBetweenBatches}ms before next batch...`);
+      await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+  }
+  // 7. 所有批次处理完毕，分析最终结果
+  console.log('[HighlightCities] All batches processed.');
+  const successfulCities = allResults.filter(r => r.status === 'fulfilled').map(r => r.value);
+  const failedResults = allResults.filter(r => r.status === 'rejected'); // 筛选出我们标记为 rejected 的结果
+  console.log(`[HighlightCities] Summary: ${successfulCities.length} cities processed (may include 'no_data'), ${failedResults.length} failed.`);
+  // console.log('[HighlightCities] Successfully processed city names:', successfulCities); // 可以打印成功列表
+  if (failedResults.length > 0) {
+    const failedMessages = failedResults.map(r => r.reason.message); // 从 reason 中提取错误信息
+    console.warn(`[HighlightCities] Failed operations (${failedResults.length}):`, failedMessages);
+    // errorMessage.value = `部分城市 (${failedMessages.join(', ')}) 加载失败。`; // 更新 UI 提示
+  } else {
+    // errorMessage.value = ''; // 清除错误信息
+  }
+  // 8. 可选：在所有绘制完成后调整视野
+  if (drawnPolygons.value.length > 0) {
+    console.log('[HighlightCities] Optional: Skipping map.setFitView() for now.');
+    // 考虑在绘制物较多时，setFitView 也可能需要一点时间，或者可以选择不调用
+    // try {
+    //   map.value.setFitView(drawnPolygons.value, false, [60, 60, 60, 60], 12);
+    // } catch (fitViewError) {
+    //   console.error('[HighlightCities] Error calling setFitView:', fitViewError);
+    // }
+  }
+  console.log('[HighlightCities] highlightCities function finished execution.');
   };
-  
+
   const clearHighlights = () => {
       if (map.value) {
           // 使用 AMap 实例的 remove 方法一次性移除所有覆盖物
