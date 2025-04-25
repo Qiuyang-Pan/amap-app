@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vue AMap Highlight</title>
+
+    <!-- 添加高德地图安全密钥配置 -->
+    <script type="text/javascript">
+      window._AMapSecurityConfig = {
+        securityJsCode: 'c8ca8e051685f5f4b844a5fa88ed1251', // 替换为你自己的安全密钥
+      }
+    </script>
+
+    <!-- 引入高德地图 JS API -->
+    <!-- 请将 YOUR_AMAP_KEY 替换为你申请的 Key -->
+    <!-- plugins=AMap.DistrictSearch 是为了加载行政区划查询插件 -->
+    <script
+      type="text/javascript"
+      src="https://webapi.amap.com/maps?v=2.0&key=302ead345c7e5296f413398022a327c2&plugin=AMap.DistrictSearch"
+    ></script>
+
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
