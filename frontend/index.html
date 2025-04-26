@@ -9,7 +9,7 @@
     <!-- 添加高德地图安全密钥配置 -->
     <script type="text/javascript">
       window._AMapSecurityConfig = {
-        securityJsCode: 'c8ca8e051685f5f4b844a5fa88ed1251', // 替换为你自己的安全密钥
+        securityJsCode: '%VITE_AMAP_SECURITY_CODE%', // 替换为你自己的安全密钥
       }
     </script>
 
@@ -18,7 +18,7 @@
     <!-- plugins=AMap.DistrictSearch 是为了加载行政区划查询插件 -->
     <script
       type="text/javascript"
-      src="https://webapi.amap.com/maps?v=2.0&key=302ead345c7e5296f413398022a327c2&plugin=AMap.DistrictSearch"
+      src="https://webapi.amap.com/maps?v=2.0&key=%VITE_AMAP_KEY%&plugin=AMap.DistrictSearch"
     ></script>
 
   </head>
