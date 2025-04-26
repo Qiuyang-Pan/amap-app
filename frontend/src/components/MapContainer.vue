@@ -167,7 +167,7 @@
       }
   };
   
-  const highlightCities = async (batchSize = 3, delayBetweenBatches = 500) => { // 设置默认批大小和延时
+  const highlightCities = async (batchSize = 3, delayBetweenBatches = 1000) => { // 设置默认批大小和延时
   // 1. 前置条件检查
   if (!districtSearch.value || !map.value || !citiesToHighlight.value || citiesToHighlight.value.length === 0) {
     console.warn('[HighlightCities] Aborted: Initial conditions not met (Map/Search not ready or no cities).');
